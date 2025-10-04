@@ -20,6 +20,8 @@ The platform uses NASA GeneLab datasets such as GLDS-91, GLDS-127, GLDS-140, GLD
 
 ## Live Demo
 [View Dashboard](https://rumeyssaaki.github.io/biogravity-lab/)
+## Project Introduction Video
+[![Watch the video](https://img.youtube.com/vi/KP206F4Z4H8/0.jpg)](https://youtu.be/KP206F4Z4H8?si=eo73_pyDq1RjFE7l)
 
 ## Team
 BioGravity Lab Team – NASA Space Apps Challenge 2025
