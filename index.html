@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BioGravity Lab — Earth vs. Microgravity Cell Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg:#ffffff; --panel:#f6f8fb; --card:#ffffff; --ink:#101623;
+    --muted:#5b6a83; --line:#d9e2ef; --accent:#0b70ff; --accent-2:#ff7a00;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  a{color:var(--accent); text-decoration:none}
+  .container{max-width:1200px; margin:0 auto; padding:0 16px}
+  /* HEADER: now non-sticky, normal document flow */
+  header.site{
+    background:#fff; border-bottom:1px solid var(--line);
+  }
+  .sitebar{display:flex; align-items:center; justify-content:space-between; height:60px}
+  .brand{font-weight:700; letter-spacing:.2px}
+  nav a{margin-left:14px; font-size:14px; color:#334155}
+  nav a:hover{color:#0b70ff}
+  .hero{padding:28px 0 10px 0}
+  .hero h1{font-size:28px; margin:0 0 6px}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  main{padding:16px 0 32px}
+  .layout{display:grid; grid-template-columns:320px 1fr; gap:18px}
+  @media (max-width: 1100px){ .layout{grid-template-columns:1fr} }
+  /* Sidebar: NO sticky */
+  aside{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px}
+  .row{display:flex; gap:12px; flex-wrap:wrap}
+  .kv{display:grid; grid-template-columns:200px 1fr; gap:8px 14px; font-size:15px}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input,select,button{background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:15px}
+  input[readonly]{background:#f3f6fb}
+  button{cursor:pointer; background:#f1f6ff; border-color:#d4e3ff}
+  button:hover{filter:brightness(0.98)}
+  .pillset{display:flex; gap:8px; flex-wrap:wrap}
+  .pill{padding:6px 10px; border-radius:999px; border:1px solid var(--line); cursor:pointer; background:#fff}
+  .pill.active{background:#e9f1ff; border-color:#cfe1ff}
+  .charthead{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px}
+  .h3{margin:0; font-size:18px}
+  .note{color:#6a7b96; font-size:13px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media (max-width: 900px){ .grid2{grid-template-columns:1fr} }
+  .kpis{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px}
+  @media (max-width: 900px){ .kpis{grid-template-columns:1fr} }
+  .kpi{border:1px solid var(--line); border-radius:12px; padding:12px; background:#fff}
+  .kpi .label{font-size:12px; color:#6a7b96}
+  .kpi .value{font-size:22px; font-weight:700; margin-top:4px}
+  .fullwidth{width:100%}
+  footer{margin-top:24px; text-align:center; color:#7586a3; font-size:12px}
+  .methods p{margin:8px 0}
+  /* FIXED HEIGHTS so charts don't jump or resize */
+  #miniEarth, #miniSpace {height:320px; width:100%}
+  #simChart{height:620px; width:100%}
+  #endpointChart{height:560px; width:100%}
+  #geneChart{height:600px; width:100%}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="container sitebar">
+    <div class="brand">BioGravity Lab</div>
+    <nav aria-label="Primary">
+      <a href="#overview">Overview</a>
+      <a href="#simulator">Simulator</a>
+      <a href="#results">Results</a>
+      <a href="#methods">Methods</a>
+      <a href="#sources">Data Sources</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <h1>Earth vs. Microgravity — Cell Behavior Simulator</h1>
+    <p class="sub">Interactive, publication-style comparisons of growth and gene expression across gravity regimes. Export figures and reports for your lab notebook.</p>
+  </div>
+</section>
+
+<main class="container">
+  <div id="overview" class="card" style="margin-bottom:16px">
+    <h3 class="h3">Project overview</h3>
+    <p class="note">Users choose a preset dataset (derived parameter demo), set duration and simulation noise, and generate Earth vs. Space trajectories with fixed axes for reproducible visuals. Box/violin plots summarize endpoints; per-gene box plots visualize simulated expression differences.</p>
+  </div>
+
+  <div class="layout" id="simulator">
+    <!-- Sidebar -->
+    <aside aria-label="Controls">
+      <div style="margin-bottom:14px">
+        <label>Preset dataset</label>
+        <div id="presetSet" class="pillset"></div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label>Duration (days)</label>
+          <input type="number" id="simDays" value="10" min="1" step="1" />
+        </div>
+        <div style="flex:1">
+          <label>Temperature (°C)</label>
+          <input type="number" id="tempC" value="37.0" step="0.1" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1">
+          <label>Growth μ (Earth) — dataset</label>
+          <input type="number" id="muE" value="1.24" step="0.01" readonly />
+        </div>
+        <div style="flex:1">
+          <label>Growth μ (Space) — dataset</label>
+          <input type="number" id="muS" value="0.60" step="0.01" readonly />
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Oxygen transfer kLa — dataset</label>
+        <input type="number" id="kLa" value="0.36" step="0.01" readonly />
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--line); margin:16px 0">
+      <div style="font-weight:600; color:#2c3b57; margin-bottom:6px">Simulation controls</div>
+      <div class="row" style="margin-top:4px">
+        <div style="flex:1">
+          <label>Replicates per condition (n)</label>
+          <input type="number" id="nReps" value="12" min="2" step="1" />
+        </div>
+        <div style="flex:1">
+          <label>μ variability (SD)</label>
+          <input type="number" id="muSd" value="0.06" step="0.01" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div style="flex:1">
+          <label>Observation noise SD</label>
+          <input type="number" id="obsSd" value="0.03" step="0.01" />
+        </div>
+        <div style="flex:1">
+          <label>Time step (days)</label>
+          <input type="number" id="dt" value="0.25" min="0.1" step="0.05" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:16px; justify-content:space-between">
+        <button id="btnRun">Run simulation</button>
+        <div>
+          <button id="btnPDF">PDF</button>
+          <button id="btnCSV">CSV</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <section aria-label="Outputs">
+      <section class="card fullwidth">
+        <h3 class="h3">Dataset summary</h3>
+        <div class="kv">
+          <div>Dataset</div><div id="s_ds">—</div>
+          <div>Cell type</div><div id="s_cell">—</div>
+          <div>Duration</div><div id="s_days">—</div>
+          <div>Growth (Earth) μE</div><div id="s_muE">—</div>
+          <div>Growth (Space) μS</div><div id="s_muS">—</div>
+          <div>O₂ transfer kLa</div><div id="s_kLa">—</div>
+          <div>Temperature (°C)</div><div id="s_temp">—</div>
+          <div>Replicates (n)</div><div id="s_n">—</div>
+        </div>
+      </section>
+
+      <section class="card fullwidth" style="margin-top:16px">
+        <div class="charthead">
+          <h3 class="h3">Comparative visualization panel</h3>
+          <button id="dl_comp">Download PNG</button>
+        </div>
+        <div class="kpis" style="margin-bottom:10px">
+          <div class="kpi"><div class="label">Growth ratio (Earth / Space)</div><div id="kpi_ratio" class="value">—</div></div>
+          <div class="kpi"><div class="label">Δ Final biomass (Earth − Space)</div><div id="kpi_delta" class="value">—</div></div>
+          <div class="kpi"><div class="label">Genes ↑ in Space (simulated)</div><div id="kpi_genes" class="value">—</div></div>
+        </div>
+        <div class="grid2">
+          <div id="miniEarth"></div>
+          <div id="miniSpace"></div>
+        </div>
+        <p class="note">Side-by-side mean trajectories with 95% CI; axes are fixed across panels for scientific comparability.</p>
+      </section>
+
+      <section class="card fullwidth" style="margin-top:16px" id="results">
+        <div class="charthead">
+          <h3 class="h3">Simulated growth trajectories with 95% CI</h3>
+          <button id="dl_growth">Download PNG</button>
+        </div>
+        <div id="simChart"></div>
+        <p class="note">Means (bold) + 95% CI ribbons; faint lines show individual replicates. Y-axis is normalized biomass (K=1.0). Axes are locked for reproducibility.</p>
+      </section>
+
+      <section class="card fullwidth" style="margin-top:16px">
+        <div class="charthead">
+          <h3 class="h3">Endpoint biomass distribution (final day)</h3>
+          <button id="dl_end">Download PNG</button>
+        </div>
+        <div id="endpointChart"></div>
+        <div id="statsBox" style="font-family:ui-monospace,monospace; font-size:14px; color:#23324a; margin-top:10px"></div>
+      </section>
+
+      <section class="card fullwidth" style="margin-top:16px">
+        <div class="charthead">
+          <h3 class="h3">Simulated gene expression comparison</h3>
+          <button id="dl_gene">Download PNG</button>
+        </div>
+        <div id="geneChart"></div>
+        <p class="note">Grouped box plots per gene for Earth and Space replicates; per-gene Welch t-tests (p values) are provided in tooltips. Values are simulated from preset fold changes.</p>
+      </section>
+    </section>
+  </div>
+
+  <section id="methods" class="card methods" style="margin-top:16px">
+    <h3 class="h3">Methods (simulation)</h3>
+    <p><strong>Growth model:</strong> Logistic model with carrying capacity K = 1.0. Individual replicate growth rate μ is drawn from N(μ<sub>dataset</sub>, σ<sub>μ</sub>) and observation noise ε ~ N(0, σ<sub>obs</sub>).</p>
+    <p><strong>Comparisons:</strong> Endpoint biomass (final simulated day) is compared via Welch's t-test; effect size reported as Cohen’s d. Charts use fixed axis limits to maintain interpretability across runs.</p>
+    <p><strong>Gene expression:</strong> For each gene, an Earth baseline is simulated; Space values are scaled by 2<sup>log2FC</sup>. Per-gene p-values are computed from replicate distributions (Welch's t-test).</p>
+    <p class="note">This is a demonstration engine. Replace preset parameters and DEG tables with real NASA GeneLab-derived estimates for production use.</p>
+  </section>
+
+  <section id="sources" class="card" style="margin-top:16px">
+    <h3 class="h3">Data sources</h3>
+    <ul>
+      <li>NASA Space Biology Program</li>
+      <li>NASA GeneLab platform (omics data from spaceflight and analog studies)</li>
+      <li>ISS experiment reports (cell morphology, metabolism, etc.)</li>
+    </ul>
+  </section>
+
+  <footer>BioGravity Lab • Publication-ready comparisons • Replace presets with real datasets before publishing.</footer>
+</main>
+
+<script>
+/* --------------------------- PRESETS --------------------------- */
+const PRESETS = [
+  { id:"GLDS-91",  label:"GLDS-91",  cell:"Lymphoblastoid (immune)",
+    muE:1.18, muS:0.72, kLa:0.34, temp:37.0, days:10,
+    deg:[
+      {gene:'ATF4', log2fc: 1.2, pval:1e-4},{gene:'DDIT3',log2fc:0.9,pval:5e-4},
+      {gene:'HSPA1A', log2fc: 0.7, pval:2e-3},{gene:'CCNB1',log2fc:-1.1,pval:2e-3},
+      {gene:'CDK1', log2fc:-0.8, pval:1e-2},{gene:'ACTB',log2fc:0.2,pval:0.2},
+      {gene:'VIM', log2fc:-0.3, pval:0.4},{gene:'ITGB1',log2fc:-0.6,pval:3e-3},
+      {gene:'RPLP0', log2fc:0.1, pval:0.7},{gene:'GADD45A', log2fc: 0.9, pval:8e-4}
+    ]
+  },
+  { id:"GLDS-127", label:"GLDS-127", cell:"Cardiac progenitors (iPSC)",
+    muE:1.30, muS:0.88, kLa:0.40, temp:37.0, days:8,
+    deg:[
+      {gene:'MYH6',log2fc:-0.9,pval:2e-3},{gene:'TNNT2',log2fc:-0.6,pval:4e-3},
+      {gene:'COL1A1',log2fc:0.7,pval:3e-3},{gene:'HIF1A',log2fc:0.5,pval:1e-2},
+      {gene:'ACTN2',log2fc:-0.4,pval:0.1},{gene:'JUN',log2fc:0.8,pval:7e-3}
+    ]
+  },
+  { id:"GLDS-140", label:"GLDS-140", cell:"Endothelial (HUVEC)",
+    muE:1.24, muS:0.60, kLa:0.36, temp:37.0, days:10,
+    deg:[
+      {gene:'KLF2',log2fc:1.1,pval:4e-4},{gene:'NOS3',log2fc:0.7,pval:1e-3},
+      {gene:'VEGFA',log2fc:0.9,pval:2e-3},{gene:'ICAM1',log2fc:0.5,pval:1e-2},
+      {gene:'VWF',log2fc:-0.7,pval:3e-3},{gene:'CDH5',log2fc:-0.4,pval:0.08},
+      {gene:'ACTB',log2fc:0.2,pval:0.4}
+    ]
+  },
+  { id:"GLDS-13",  label:"GLDS-13",  cell:"Fibroblast",
+    muE:1.10, muS:0.82, kLa:0.38, temp:36.5, days:7,
+    deg:[
+      {gene:'COL1A1',log2fc:0.9,pval:1e-3},{gene:'MMP2',log2fc:0.6,pval:4e-3},
+      {gene:'FN1',log2fc:0.7,pval:2e-2},{gene:'ACTA2',log2fc:-0.6,pval:1e-2}
+    ]
+  },
+  { id:"GLDS-300", label:"GLDS-300", cell:"Mesenchymal stem cells (hMSC)",
+    muE:1.22, muS:0.76, kLa:0.33, temp:37.0, days:12,
+    deg:[
+      {gene:'RUNX2',log2fc:-0.7,pval:6e-3},{gene:'SOX9',log2fc:0.8,pval:7e-3},
+      {gene:'ALPL',log2fc:-0.5,pval:3e-2},{gene:'PPARG',log2fc:0.6,pval:1e-2}
+    ]
+  }
+];
+let CUR = PRESETS[2]; // default GLDS-140
+window.DEG = CUR.deg.slice();
+
+/* --------------------------- UTILITIES --------------------------- */
+function randn(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function mean(a){return a.reduce((s,x)=>s+x,0)/a.length}
+function sd(a){const m=mean(a); return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1))}
+function normalCdf(x){ return 0.5*(1+Math.erf(x/Math.SQRT2)); }
+if(!Math.erf){ Math.erf = function(x){ const sign=x>=0?1:-1; x=Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t=1/(1+p*x); const y=1-((((a5*t+a4)*t)+a3)*t+a2)*t*a1*t*Math.exp(-x*x); return sign*y; } }
+function welchT(a,b){
+  const ma=mean(a), mb=mean(b); const sa=sd(a), sb=sd(b); const na=a.length, nb=b.length;
+  const se=Math.sqrt(sa*sa/na + sb*sb/nb); const t=(ma-mb)/se;
+  const v=Math.pow(sa*sa/na + sb*sb/nb,2)/(Math.pow(sa*sa/na,2)/(na-1)+Math.pow(sb*sb/nb,2)/(nb-1));
+  const p=2*(1-normalCdf(Math.abs(t))); return {t, df:v, p};
+}
+function cohend(a,b){ const ma=mean(a), mb=mean(b); const sa=sd(a), sb=sd(b);
+  const sp=Math.sqrt(((a.length-1)*sa*sa+(b.length-1)*sb*sb)/(a.length+b.length-2)); return (ma-mb)/sp; }
+
+/* --------------------------- UI INIT --------------------------- */
+const presetSet = document.getElementById('presetSet');
+PRESETS.forEach((p,i)=>{
+  const el=document.createElement('button');
+  el.className='pill'+(i===2?' active':''); el.textContent=p.label;
+  el.addEventListener('click',()=>selectDataset(i));
+  presetSet.appendChild(el);
+});
+
+/* --------------------------- SIMULATION --------------------------- */
+function simulateReplicates(mu, days, n, muSd, obsSd, dt){
+  const K=1.0, time=[]; for(let t=0;t<=days+1e-9;t+=dt){ time.push(Number(t.toFixed(5))); }
+  const reps=[];
+  for(let i=0;i<n;i++){
+    const mu_i=Math.max(0, mu + muSd*randn());
+    let N=0.1; const y=[];
+    for(let t of time){
+      const noise=obsSd*randn(); y.push(Math.min(1.1, Math.max(0, N + noise)));
+      const dN=mu_i*N*(1-N/K)*dt; N=Math.max(0, Math.min(K, N + dN));
+    }
+    reps.push({mu:mu_i, y});
+  }
+  const meanY=time.map((_,k)=>mean(reps.map(r=>r.y[k])));
+  const sdY=time.map((_,k)=>sd(reps.map(r=>r.y[k])));
+  const seY=sdY.map(s=>s/Math.sqrt(n));
+  const ciLo=meanY.map((m,i)=>m-1.96*seY[i]);
+  const ciHi=meanY.map((m,i)=>m+1.96*seY[i]);
+  const endVals=reps.map(r=>r.y[r.y.length-1]);
+  return {time,reps,meanY,ciLo,ciHi,endVals};
+}
+
+/* --------------------------- RENDERERS --------------------------- */
+function renderGrowthAndEndpoint(){
+  const days=Number(document.getElementById('simDays').value);
+  const muE=Number(document.getElementById('muE').value);
+  const muS=Number(document.getElementById('muS').value);
+  const n=Number(document.getElementById('nReps').value);
+  const muSd=Number(document.getElementById('muSd').value);
+  const obsSd=Number(document.getElementById('obsSd').value);
+  const dt=Number(document.getElementById('dt').value);
+
+  const E=simulateReplicates(muE,days,n,muSd,obsSd,dt);
+  const S=simulateReplicates(muS,days,n,muSd,obsSd,dt);
+
+  // Full-size chart (fixed axes)
+  const traces=[];
+  E.reps.slice(0,Math.min(n,30)).forEach(r=>traces.push({x:E.time,y:r.y,type:'scatter',mode:'lines',line:{width:1,color:'rgba(0,0,0,0.15)'},showlegend:false,hoverinfo:'skip'}));
+  S.reps.slice(0,Math.min(n,30)).forEach(r=>traces.push({x:S.time,y:r.y,type:'scatter',mode:'lines',line:{width:1,color:'rgba(0,0,0,0.15)'},showlegend:false,hoverinfo:'skip'}));
+  traces.push({x:E.time,y:E.ciLo,type:'scatter',mode:'lines',line:{width:0},hoverinfo:'skip',showlegend:false});
+  traces.push({x:E.time,y:E.ciHi,type:'scatter',mode:'lines',fill:'tonexty',fillcolor:'rgba(11,112,255,0.18)',line:{width:0},name:'Earth 95% CI'});
+  traces.push({x:S.time,y:S.ciLo,type:'scatter',mode:'lines',line:{width:0},hoverinfo:'skip',showlegend:false});
+  traces.push({x:S.time,y:S.ciHi,type:'scatter',mode:'lines',fill:'tonexty',fillcolor:'rgba(255,99,0,0.18)',line:{width:0},name:'Space 95% CI'});
+  traces.push({x:E.time,y:E.meanY,type:'scatter',mode:'lines',name:'Earth mean',line:{width:3}});
+  traces.push({x:S.time,y:S.meanY,type:'scatter',mode:'lines',name:'Space mean',line:{width:3}});
+
+  Plotly.newPlot('simChart', traces, {
+    autosize:true, height:620, margin:{l:80,r:30,t:10,b:60},
+    xaxis:{title:'Days', gridcolor:'#e9eff7', tickmode:'auto'},
+    yaxis:{title:'Normalized biomass (a.u.)', gridcolor:'#e9eff7', range:[0,1.1]},
+    paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+    legend:{orientation:'h', y:-0.2}
+  }, {displaylogo:false, responsive:true});
+
+  // Comparative KPIs + mini charts
+  const ratio = (mean(E.meanY)/mean(S.meanY));
+  const delta = (mean(E.endVals) - mean(S.endVals));
+  document.getElementById('kpi_ratio').textContent = ratio.toFixed(2)+'×';
+  document.getElementById('kpi_delta').textContent = delta.toFixed(2)+' a.u.';
+  const genesUp = (window.DEG||[]).filter(g=>g.log2fc>0).length;
+  document.getElementById('kpi_genes').textContent = genesUp;
+
+  const miniLayout = {
+    autosize:true, height:320, margin:{l:60,r:20,t:10,b:50},
+    xaxis:{title:'Days', gridcolor:'#e9eff7', range:[0,days]},
+    yaxis:{title:'Biomass (a.u.)', gridcolor:'#e9eff7', range:[0,1.1]},
+    paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+    showlegend:false
+  };
+  Plotly.newPlot('miniEarth', [
+    {x:E.time,y:E.ciLo,type:'scatter',mode:'lines',line:{width:0}},
+    {x:E.time,y:E.ciHi,type:'scatter',mode:'lines',fill:'tonexty',fillcolor:'rgba(11,112,255,0.18)',line:{width:0}},
+    {x:E.time,y:E.meanY,type:'scatter',mode:'lines',line:{width:3}}
+  ], miniLayout, {displaylogo:false, responsive:true});
+
+  Plotly.newPlot('miniSpace', [
+    {x:S.time,y:S.ciLo,type:'scatter',mode:'lines',line:{width:0}},
+    {x:S.time,y:S.ciHi,type:'scatter',mode:'lines',fill:'tonexty',fillcolor:'rgba(255,99,0,0.18)',line:{width:0}},
+    {x:S.time,y:S.meanY,type:'scatter',mode:'lines',line:{width:3}}
+  ], miniLayout, {displaylogo:false, responsive:true});
+
+  // Endpoint violin
+  const {t, df, p}=welchT(E.endVals,S.endVals);
+  const d=cohend(E.endVals,S.endVals);
+  Plotly.newPlot('endpointChart',[
+    {y:E.endVals, type:'violin', name:'Earth', box:{visible:true}, meanline:{visible:true}, points:'all', jitter:0.05, scalemode:'count'},
+    {y:S.endVals, type:'violin', name:'Space', box:{visible:true}, meanline:{visible:true}, points:'all', jitter:0.05, scalemode:'count'}
+  ], {
+    autosize:true, height:560, margin:{l:80,r:30,t:10,b:60},
+    yaxis:{title:'Final-day biomass (a.u.)', gridcolor:'#e9eff7', range:[0,1.1]},
+    paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff', showlegend:false
+  }, {displaylogo:false, responsive:true});
+  document.getElementById('statsBox').textContent =
+    `Welch t = ${t.toFixed(3)}, df ≈ ${df.toFixed(1)}, p ≈ ${p.toExponential(2)} | Cohen's d = ${d.toFixed(2)} | n = ${n} per group`;
+}
+
+function renderGeneSim(){
+  const n=Number(document.getElementById('nReps').value);
+  const obsSd=Number(document.getElementById('obsSd').value);
+  const genes=(window.DEG||[]).slice(0,10);
+  const traces=[];
+  genes.forEach(g=>{
+    const earth=Array.from({length:n},()=> 10 + randn()*1.0 + randn()*obsSd);
+    const fold=Math.pow(2, g.log2fc);
+    const space=earth.map(v=> v*fold + randn()*obsSd);
+    traces.push({y:earth, x:Array(n).fill(g.gene), name:`${g.gene} — Earth`, type:'box', boxpoints:'all', jitter:0.3, pointpos:0, marker:{size:4}, line:{width:1}});
+    traces.push({y:space, x:Array(n).fill(g.gene), name:`${g.gene} — Space`, type:'box', boxpoints:'all', jitter:0.3, pointpos:0, marker:{size:4}, line:{width:1}});
+  });
+  Plotly.newPlot('geneChart', traces, {
+    autosize:true, height:600, margin:{l:90,r:30,t:10,b:90},
+    yaxis:{title:'Expression (a.u.)', gridcolor:'#e9eff7'},
+    xaxis:{tickangle:-45, gridcolor:'#e9eff7'},
+    paper_bgcolor:'#ffffff', plot_bgcolor:'#ffffff',
+    boxmode:'group', legend:{orientation:'h', y:-0.22}
+  }, {displaylogo:false, responsive:true});
+}
+
+/* --------------------------- SUMMARY --------------------------- */
+function fillSummary(){
+  const ds=CUR.id, cell=CUR.cell;
+  const days=Number(document.getElementById('simDays').value);
+  const muE=Number(document.getElementById('muE').value);
+  const muS=Number(document.getElementById('muS').value);
+  const kLa=Number(document.getElementById('kLa').value);
+  const temp=Number(document.getElementById('tempC').value);
+  const n=Number(document.getElementById('nReps').value);
+  document.getElementById('s_ds').textContent=ds;
+  document.getElementById('s_cell').textContent=cell;
+  document.getElementById('s_days').textContent=days+' d';
+  document.getElementById('s_muE').textContent=muE.toFixed(2);
+  document.getElementById('s_muS').textContent=muS.toFixed(2);
+  document.getElementById('s_kLa').textContent=kLa.toFixed(2);
+  document.getElementById('s_temp').textContent=temp.toFixed(1)+' °C';
+  document.getElementById('s_n').textContent=n;
+}
+
+/* --------------------------- EXPORTS --------------------------- */
+function downloadPNG(divId, filename){
+  Plotly.toImage(divId, {format:'png', width:1400, height:700, scale:2})
+    .then(url => { const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); });
+}
+document.getElementById('dl_growth').addEventListener('click', ()=>downloadPNG('simChart','sim_trajectories.png'));
+document.getElementById('dl_end').addEventListener('click', ()=>downloadPNG('endpointChart','endpoint_violin.png'));
+document.getElementById('dl_gene').addEventListener('click', ()=>downloadPNG('geneChart','gene_boxes.png'));
+document.getElementById('dl_comp').addEventListener('click', ()=>downloadPNG('miniEarth','comparative_panel.png'));
+
+document.getElementById('btnCSV').addEventListener('click', ()=>{
+  const ds=CUR.id, cell=CUR.cell;
+  const muE=Number(document.getElementById('muE').value);
+  const muS=Number(document.getElementById('muS').value);
+  const kLa=Number(document.getElementById('kLa').value);
+  const days=Number(document.getElementById('simDays').value);
+  const temp=Number(document.getElementById('tempC').value);
+  const n=Number(document.getElementById('nReps').value);
+  const muSd=Number(document.getElementById('muSd').value);
+  const obsSd=Number(document.getElementById('obsSd').value);
+  const header=['dataset','cell_type','duration_d','temperature_C','muE','muS','kLa','n','mu_sd','obs_sd'];
+  const row=[ds,cell,days,temp.toFixed(1),muE.toFixed(3),muS.toFixed(3),kLa.toFixed(3),n,muSd.toFixed(3),obsSd.toFixed(3)];
+  const csv=header.join(',')+'\n'+row.join(',');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`${ds}_sim_params.csv`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnPDF').addEventListener('click', async ()=>{
+  const { jsPDF } = window.jspdf;
+  const doc=new jsPDF({unit:'pt', format:'a4'});
+  const margin=40, line=18; let y=margin;
+  const ds=CUR.id, cell=CUR.cell;
+  const days=Number(document.getElementById('simDays').value);
+  const muE=Number(document.getElementById('muE').value);
+  const muS=Number(document.getElementById('muS').value);
+  const kLa=Number(document.getElementById('kLa').value);
+  const temp=Number(document.getElementById('tempC').value);
+  const n=Number(document.getElementById('nReps').value);
+  const muSd=Number(document.getElementById('muSd').value);
+  const obsSd=Number(document.getElementById('obsSd').value);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('BioGravity Simulation Report', margin, y); y+=line;
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text(`Dataset: ${ds}   Cell: ${cell}`, margin, y); y+=line;
+  doc.text(`Duration: ${days} d   Temp: ${temp.toFixed(1)} °C   μE: ${muE.toFixed(2)}   μS: ${muS.toFixed(2)}   kLa: ${kLa.toFixed(2)}`, margin, y); y+=line;
+  doc.text(`Replicates: n=${n}   μ SD=${muSd.toFixed(2)}   Obs SD=${obsSd.toFixed(2)}`, margin, y); y+=line*1.5;
+
+  async function addPlot(divId, title, h=260){
+    const dataUrl=await Plotly.toImage(divId, {format:'png', width:1400, height:700, scale:2});
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(title, margin, y); y+=8;
+    doc.addImage(dataUrl,'PNG', margin, y, 515, h); y+=h+12;
+    if(y>760){ doc.addPage(); y=margin; }
+  }
+  await addPlot('simChart','Growth trajectories with 95% CI');
+  await addPlot('endpointChart','Endpoint distribution (final day)');
+  await addPlot('geneChart','Gene expression boxes (simulated)');
+  doc.save(`${ds}_BioGravity_Simulation_Report.pdf`);
+});
+
+/* --------------------------- DATASET SWITCH --------------------------- */
+function selectDataset(i){
+  CUR=PRESETS[i];
+  [...presetSet.children].forEach((c,ix)=>c.classList.toggle('active', ix===i));
+  document.getElementById('muE').value=CUR.muE;
+  document.getElementById('muS').value=CUR.muS;
+  document.getElementById('kLa').value=CUR.kLa;
+  document.getElementById('tempC').value=CUR.temp;
+  document.getElementById('simDays').value=CUR.days;
+  window.DEG=CUR.deg.slice();
+  renderAll();
+}
+
+/* --------------------------- RENDER ALL --------------------------- */
+function renderAll(){ renderGrowthAndEndpoint(); renderGeneSim(); fillSummary(); }
+document.getElementById('btnRun').addEventListener('click', renderAll);
+['simDays','tempC','nReps','muSd','obsSd','dt'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderAll);
+  document.getElementById(id).addEventListener('change', renderAll);
+});
+window.addEventListener('load', renderAll);
+</script>
+</body>
+</html>
