@@ -14,7 +14,7 @@ The project was developed for the NASA Space Apps Challenge 2025 under the “Bu
 The platform uses NASA GeneLab datasets such as GLDS-91, GLDS-127, GLDS-140, GLDS-13, and GLDS-300, along with Space Biology Program archives and ISS experiment reports.
 
 ## Tech Stack
-- HTML, CSS, JavaScript  
+- HTML 
 - Plotly.js for interactive charts  
 - jsPDF for report generation
 
